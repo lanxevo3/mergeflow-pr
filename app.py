@@ -2,12 +2,23 @@
 import sys, os
 sys.stderr = sys.stdout
 print("STEP1", flush=True)
-import json, uuid, subprocess
-from datetime import datetime
-import httpx
-from flask import Flask, request, redirect, jsonify, render_template, abort
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+try:
+    import json, uuid, subprocess
+    from datetime import datetime
+    print("STEP1b stdlib OK", flush=True)
+    import httpx
+    print("STEP1c httpx OK", flush=True)
+    from flask import Flask, request, redirect, jsonify, render_template, abort
+    print("STEP1d flask OK", flush=True)
+    from flask_sqlalchemy import SQLAlchemy
+    print("STEP1e sqlalchemy OK", flush=True)
+    from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+    print("STEP1f flask-login OK", flush=True)
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+    print(f"IMPORT FAILED: {e}", flush=True)
+    sys.exit(1)
 print("STEP2", flush=True)
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
