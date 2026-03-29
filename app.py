@@ -336,5 +336,20 @@ print("STEP5", flush=True)
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()
+        # Safely add stripe_customer_id column to existing users table
+        try:
+            db.session.execute(db.text("ALTER TABLE users ADD COLUMN stripe_customer_id VARCHAR(255)"))
+            db.session.commit()
+            print("DB: added stripe_customer_id column", flush=True)
+        except Exception:
+            db.session.rollback()
+            print("DB: stripe_customer_id column already exists (OK)", flush=True)
+        try:
+            db.session.execute(db.text("ALTER TABLE repos ADD COLUMN min_approvals INTEGER DEFAULT 1"))
+            db.session.commit()
+            print("DB: added min_approvals column", flush=True)
+        except Exception:
+            db.session.rollback()
+            print("DB: min_approvals column already exists (OK)", flush=True)
     print("STARTING SERVER", flush=True)
     app.run(host="0.0.0.0", port=8000)
