@@ -8,7 +8,7 @@ try:
     print("STEP1b stdlib OK", flush=True)
     import httpx
     print("STEP1c httpx OK", flush=True)
-    from flask import Flask, request, redirect, jsonify, render_template, abort
+    from flask import Flask, request, redirect, jsonify, render_template_string, abort
     print("STEP1d flask OK", flush=True)
     from flask_sqlalchemy import SQLAlchemy
     print("STEP1e sqlalchemy OK", flush=True)
@@ -108,9 +108,11 @@ def dashboard():
     if not current_user.is_authenticated:
         return redirect("/login")
     repos = db.session.execute(db.select(Repo).where(Repo.user_id == current_user.id)).scalars().all()
-    return render_template("dashboard.html",
-        user=current_user.github_username or current_user.email,
-        repos=[{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled, "id": r.id} for r in repos])
+    plan = current_user.plan or "Free Trial"
+    user = current_user.github_username or current_user.email
+    repos_data = [{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled, "id": r.id} for r in repos]
+    html = render_template("dashboard.html", plan=plan, user=user, repos=repos_data)
+    return html
 @app.route("/api/repos", methods=["POST"])
 def add_repo():
     if not current_user.is_authenticated:
@@ -130,8 +132,5 @@ def marketplace_webhook():
 
     return jsonify({"ok": True})
 print("STEP5", flush=True)
-if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
-    print("STARTING SERVER", flush=True)
-    app.run(host="0.0.0.0", port=8000)
+
+DASHBOARD_TMPL = """<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>MergeFlow</title><style>body{font-family:-apple-system,sans-serif;max-width:860px;margin:0 auto;padding:40px 20px;background:#0d1117;color:#c9d1d9}a{color:#58a6ff}a:hover{text-decoration:underline}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid #30363d}.logo{font-size:1.5em;font-weight:700;color:#58a6ff}.right{display:flex;gap:8px;align-items:center}.badge{background:rgba(56,139,253,0.2);color:#58a6ff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600}.btn{background:#21262d;color:#c9d1d9;padding:6px 14px;border-radius:6px;font-size:13px;border:none;cursor:pointer;display:inline-block;text-decoration:none}.btn:hover{background:#30363d}.logout{background:#da3633;color:white}.logout:hover{background:#f85149}.upg-banner{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px 18px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:center;gap:12px}.upg-banner h3{color:#58a6ff;font-size:14px;margin:0 0 2px}.upg-banner p{color:#8b949e;font-size:13px;margin:0}.upg-btn{background:#238636;color:white;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;text-decoration:none}.upg-btn:hover{background:#2ea043;text-decoration:none}.section-title{color:#8b949e;font-size:11px;text-transform:uppercase;margin-bottom:8px}.t{width:100%;border-collapse:collapse;margin-bottom:28px}.t th{text-align:left;padding:8px 12px;color:#6e7681;font-size:11px;text-transform:uppercase;border-bottom:1px solid #21262d}.t td{padding:10px 12px;border-bottom:1px solid #21262d;font-size:14px}.t tr:hover td{background:#161b22}.on{background:rgba(35,134,54,0.25);color:#3fb950;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}.off{background:rgba(218,54,51,0.15);color:#f85149;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600}.del{background:rgba(218,54,51,0.15);color:#f85149;padding:4px 10px;border-radius:6px;border:none;cursor:pointer;font-size:12px}.del:hover{background:rgba(218,54,51,0.3)}.empty{text-align:center;padding:44px;background:#161b22;border:1px solid #30363d;border-radius:8px;margin-bottom:28px}.empty h3{color:#8b949e;margin:0 0 6px;font-size:15px}.empty p{color:#6e7681;font-size:13px;margin:0}.add-box{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:18px;margin-bottom:24px}.add-box h3{color:#c9d1d9;margin:0 0 14px;font-size:14px}.form-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}.fld{display:flex;flex-direction:column;gap:3px}.fld label{font-size:11px;color:#6e7681}.fld input{background:#0d1117;border:1px solid #30363d;border-radius:6px;padding:7px 10px;color:#c9d1d9;font-size:13px;width:200px}.fld input:focus{outline:none;border-color:#58a6ff}.sub{background:#238636;color:white;border:none;padding:8px 18px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;height:34px}.sub:hover{background:#2ea043}.footer{text-align:center;color:#484f58;font-size:11px;padding
