@@ -13,10 +13,17 @@ print(f"PYTHON: {sys.version}", flush=True)
 print(f"WORKING DIR: {os.getcwd()}", flush=True)
 
 app = Flask(__name__)
-app.config.from_object("config")
+app.config.from_mapping(
+    SECRET_KEY=os.getenv("SECRET_KEY", "mergeflow-dev-secret"),
+    SQLALCHEMY_DATABASE_URI=os.getenv("DATABASE_URL"),
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    GITHUB_CLIENT_ID=os.getenv("GITHUB_CLIENT_ID"),
+    GITHUB_CLIENT_SECRET=os.getenv("GITHUB_CLIENT_SECRET"),
+    STRIPE_SECRET_KEY=os.getenv("STRIPE_SECRET_KEY"),
+)
 
-print(f"DATABASE_URL: {bool(app.config.get('DATABASE_URL'))}", flush=True)
-print(f"GITHUB_CLIENT_ID: {bool(app.config.get('GITHUB_CLIENT_ID'))}", flush=True)
+print(f"SQLALCHEMY_DATABASE_URI: {bool(app.config.get('SQLALCHEMY_DATABASE_URI'))}", flush=True)
+print(f"GITHUB_CLIENT_ID set: {bool(app.config.get('GITHUB_CLIENT_ID'))}", flush=True)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
