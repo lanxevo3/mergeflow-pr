@@ -33,6 +33,10 @@ def get_user(session_id: Optional[str] = None, db: Session = Depends(get_db)) ->
         return None
     return db.get(User, s["user_id"])
 
+@app.get("/healthz")
+async def health():
+    return {"status": "ok"}
+
 @app.get("/")
 async def root():
     with open("templates/landing.html") as f:
