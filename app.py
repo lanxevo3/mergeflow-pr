@@ -67,7 +67,8 @@ def can_add_repo(user):
         ).scalar()
         return count < 3
     return True
-print("STEP4 app alive V6_HARDENED", flush=True)@app.route("/healthz")
+print("STEP4 app alive V6_HARDENED", flush=True)
+@app.route("/healthz")
 def health():
     return jsonify({"status": "ok"})
 @app.route("/")
