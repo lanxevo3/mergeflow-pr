@@ -333,6 +333,29 @@ def marketplace_webhook():
 def logout():
     logout_user()
     return redirect("/")
+
+# TEMP TEST ROUTE - simulates a successful Stripe purchase for testing
+# Remove after confirming the upgrade flow works
+@app.route("/test-simulate-upgrade")
+def test_simulate_upgrade():
+    email = request.args.get("email", "test@example.com")
+    user = db.session.execute(db.select(User).where(User.email == email)).scalar_one_or_none()
+    if not user:
+        user = User(email=email, github_username="testuser", plan="free")
+        db.session.add(user)
+        db.session.commit()
+    old_plan = user.plan
+    user.plan = "paid"
+    user.stripe_customer_id = "cus_test_" + secrets.token_hex(8)
+    db.session.commit()
+    login_user(user)
+    return jsonify({
+        "ok": True,
+        "email": email,
+        "old_plan": old_plan,
+        "new_plan": user.plan,
+        "stripe_customer_id": user.stripe_customer_id
+    })
 print("STEP5", flush=True)
 if __name__ == "__main__":
     with app.app_context():
