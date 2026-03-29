@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os
+import sys, os, secrets
 sys.stderr = sys.stdout
 print("STEP1", flush=True)
 try:
@@ -10,25 +10,27 @@ try:
     print("STEP1c httpx OK", flush=True)
     import stripe as stripe_lib
     print("STEP1d stripe OK", flush=True)
-    from flask import Flask, request, redirect, jsonify, render_template
-    print("STEP1d flask OK", flush=True)
+    from flask import Flask, request, redirect, jsonify, render_template, session
+    print("STEP1e flask OK", flush=True)
     from flask_sqlalchemy import SQLAlchemy
-    print("STEP1e sqlalchemy OK", flush=True)
-    from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-    print("STEP1f flask-login OK", flush=True)
+    print("STEP1f sqlalchemy OK", flush=True)
+    from flask_login import LoginManager, UserMixin, login_user, logout_user
+    print("STEP1g flask-login OK", flush=True)
 except Exception as e:
-    import traceback
-    traceback.print_exc()
+    import traceback; traceback.print_exc()
     print(f"IMPORT FAILED: {e}", flush=True)
     sys.exit(1)
 print("STEP2", flush=True)
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", secrets.token_hex(32))
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["GITHUB_CLIENT_ID"] = os.getenv("GITHUB_CLIENT_ID", "")
 app.config["GITHUB_CLIENT_SECRET"] = os.getenv("GITHUB_CLIENT_SECRET", "")
 app.config["STRIPE_SECRET_KEY"] = os.getenv("STRIPE_SECRET_KEY", "")
+app.config["STRIPE_WEBHOOK_SECRET"] = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+app.config["MARKETPLACE_WEBHOOK_SECRET"] = os.getenv("MARKETPLACE_WEBHOOK_SECRET", "")
+app.config["FREE_REPO_LIMIT"] = 3
 print(f"DB={bool(app.config.get('SQLALCHEMY_DATABASE_URI'))}", flush=True)
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -38,37 +40,51 @@ print("STEP3", flush=True)
 class User(db.Model, UserMixin):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(255), unique=True, nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
     github_username = db.Column(db.String(255))
     plan = db.Column(db.String(50), default="free")
+    stripe_customer_id = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 class Repo(db.Model):
     __tablename__ = "repos"
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     full_name = db.Column(db.String(255), nullable=False)
     branch = db.Column(db.String(100), default="main")
     auto_merge_enabled = db.Column(db.Boolean, default=True)
+    min_approvals = db.Column(db.Integer, default=1)
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
-print("STEP4 app alive V5_LANDING_REDESIGN", flush=True)
-@app.route("/healthz")
+def get_user_plan(user):
+    return user.plan or "Free Trial"
+def is_free_user(user):
+    return user.plan in (None, "free", "Free Trial")
+def can_add_repo(user):
+    if is_free_user(user):
+        count = db.session.execute(
+            db.select(db.func.count()).select_from(Repo).where(Repo.user_id == user.id)
+        ).scalar()
+        return count < 3
+    return True
+print("STEP4 app alive V6_HARDENED", flush=True)@app.route("/healthz")
 def health():
-    import subprocess
-    try:
-        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
-    except:
-        commit = "unknown"
-    return jsonify({"status": "ok", "commit": commit})
+    return jsonify({"status": "ok"})
 @app.route("/")
 def root():
     return render_template("landing.html")
 @app.route("/login")
 def login():
+    state = secrets.token_hex(16)
+    session["oauth_state"] = state
     cid = app.config.get("GITHUB_CLIENT_ID", "")
-    return redirect("https://github.com/login/oauth/authorize?client_id=" + cid + "&scope=repo,admin:repo_hook")
+    return redirect(f"https://github.com/login/oauth/authorize?client_id={cid}&scope=repo,admin:repo_hook&state={state}")
 @app.route("/github/callback")
 def oauth_callback():
+    stored_state = session.pop("oauth_state", None)
+    incoming_state = request.args.get("state")
+    if not stored_state or stored_state != incoming_state:
+        return jsonify({"error": "Invalid OAuth state - possible CSRF attack"}), 400
     code = request.args.get("code")
     if not code:
         return jsonify({"error": "Missing OAuth code"}), 400
@@ -107,54 +123,98 @@ def oauth_callback():
         login_user(user)
         return redirect("/dashboard")
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 @app.route("/dashboard")
 def dashboard():
+    from flask_login import current_user
     if not current_user.is_authenticated:
         return redirect("/login")
     repos = db.session.execute(db.select(Repo).where(Repo.user_id == current_user.id)).scalars().all()
-    plan = current_user.plan or "Free Trial"
+    plan = get_user_plan(current_user)
     user = current_user.github_username or current_user.email
-    repos_data = [{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled, "id": r.id} for r in repos]
     upgrade_msg = request.args.get("upgrade", "")
+    repos_data = [{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled, "id": r.id, "min_approvals": r.min_approvals} for r in repos]
     return render_template("dashboard.html", plan=plan, user=user, repos=repos_data, upgrade_msg=upgrade_msg)
 @app.route("/api/repos", methods=["POST"])
 def add_repo():
+    from flask_login import current_user
     if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
+    if not can_add_repo(current_user):
+        return jsonify({"error": "Free plan limited to 3 repos. Upgrade to add more."}), 403
     data = request.get_json() or {}
-    repo = Repo(user_id=current_user.id, full_name=data.get("full_name",""), branch=data.get("branch","main"))
+    full_name = data.get("full_name", "").strip()
+    if not full_name or "/" not in full_name:
+        return jsonify({"error": "Invalid repo format. Use owner/repo"}), 400
+    branch = data.get("branch", "main").strip() or "main"
+    min_approvals = int(data.get("min_approvals", 1))
+    repo = Repo(user_id=current_user.id, full_name=full_name, branch=branch, min_approvals=min_approvals)
     db.session.add(repo)
     db.session.commit()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "id": repo.id})
 @app.route("/api/repos/<int:repo_id>", methods=["DELETE"])
 def delete_repo(repo_id):
+    from flask_login import current_user
     if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    repo = db.session.execute(db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)).scalar_one_or_none()
+    repo = db.session.execute(
+        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not repo:
         return jsonify({"error": "Repo not found"}), 404
     db.session.delete(repo)
     db.session.commit()
     return jsonify({"ok": True})
+@app.route("/api/repos/<int:repo_id>", methods=["PATCH"])
+def update_repo(repo_id):
+    from flask_login import current_user
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Not authenticated"}), 401
+    repo = db.session.execute(db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)).scalar_one_or_none()
+    if not repo:
+        return jsonify({"error": "Repo not found"}), 404
+    data = request.get_json() or {}
+    if "branch" in data:
+        repo.branch = data["branch"].strip() or "main"
+    if "min_approvals" in data:
+        repo.min_approvals = max(1, int(data["min_approvals"]))
+    if "auto_merge_enabled" in data:
+        repo.auto_merge_enabled = bool(data["auto_merge_enabled"])
+    db.session.commit()
+    return jsonify({"ok": True})
+@app.route("/api/repos/<int:repo_id>/toggle", methods=["POST"])
+def toggle_repo(repo_id):
+    from flask_login import current_user
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Not authenticated"}), 401
+    repo = db.session.execute(
+        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if not repo:
+        return jsonify({"error": "Repo not found"}), 404
+    repo.auto_merge_enabled = not repo.auto_merge_enabled
+    db.session.commit()
+    return jsonify({"ok": True, "enabled": repo.auto_merge_enabled})
 @app.route("/upgrade/<plan>")
 def upgrade(plan):
+    if plan not in ("individual", "team"):
+        return "Invalid plan", 400
     stripe_key = app.config.get("STRIPE_SECRET_KEY", "")
+    if not stripe_key:
+        return "Stripe not configured.", 503
+    from flask_login import current_user
     plans = {
         "individual": {"name": "MergeFlow Individual", "amount": 2900, "interval": "month"},
         "team": {"name": "MergeFlow Team", "amount": 9900, "interval": "month"},
     }
-    cfg = plans.get(plan, plans["individual"])
-    if not stripe_key:
-        return "Stripe not configured.", 503
+    cfg = plans[plan]
     try:
         import stripe
         stripe.api_key = stripe_key
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{
+        kwargs = {
+            "mode": "subscription",
+            "line_items": [{
                 "price_data": {
                     "currency": "usd",
                     "product_data": {"name": cfg["name"]},
@@ -163,38 +223,111 @@ def upgrade(plan):
                 },
                 "quantity": 1,
             }],
-            success_url="https://mergeflow-pr.onrender.com/dashboard?upgrade=success",
-            cancel_url="https://mergeflow-pr.onrender.com/dashboard?upgrade=cancelled",
-        )
-        return redirect(session.url)
+            "success_url": "https://mergeflow-pr.onrender.com/dashboard?upgrade=success",
+            "cancel_url": "https://mergeflow-pr.onrender.com/dashboard?upgrade=cancelled",
+        }
+        if current_user.is_authenticated:
+            kwargs["customer_email"] = current_user.email
+        sess = stripe.checkout.Session.create(**kwargs)
+        return redirect(sess.url)
     except Exception as e:
+        import traceback; traceback.print_exc()
         return f"Stripe error: {str(e)}", 500
+def verify_stripe_signature(payload, sig):
+    secret = app.config.get("STRIPE_WEBHOOK_SECRET", "")
+    if not secret:
+        print("WARNING: STRIPE_WEBHOOK_SECRET not set - skipping verification", flush=True)
+        return None
+    import stripe
+    stripe.api_key = app.config.get("STRIPE_SECRET_KEY", "")
+    try:
+        return stripe.Webhook.construct_event(payload, sig, secret)
+    except Exception as e:
+        print(f"Stripe signature verification failed: {e}", flush=True)
+        return None
 @app.route("/webhook/stripe", methods=["POST"])
 def stripe_webhook():
     try:
-        event = request.get_json()
-        print(f"Stripe webhook: {event.get('type')}", flush=True)
-        if event.get("type") == "checkout.session.completed":
-            session = event["data"]["object"]
-            customer_email = session.get("customer_details", {}).get("email")
+        payload = request.get_data()
+        sig = request.headers.get("Stripe-Signature", "")
+        event = verify_stripe_signature(payload, sig)
+        if event is None and app.config.get("STRIPE_WEBHOOK_SECRET"):
+            return jsonify({"error": "Invalid signature"}), 400
+        event_type = event.get("type", "") if event else request.get_json().get("type", "unknown")
+        print(f"Stripe webhook: {event_type}", flush=True)
+        if event and event_type == "checkout.session.completed":
+            session_obj = event["data"]["object"]
+            customer_email = session_obj.get("customer_details", {}).get("email")
+            customer_id = session_obj.get("customer")
+            if not customer_email and customer_id:
+                try:
+                    import stripe
+                    stripe.api_key = app.config.get("STRIPE_SECRET_KEY", "")
+                    cu = stripe.Customer.retrieve(customer_id)
+                    customer_email = cu.get("email")
+                except Exception as ex:
+                    print(f"Could not retrieve Stripe customer: {ex}", flush=True)
             if customer_email:
-                user = db.session.execute(db.select(User).where(User.email == customer_email)).scalar_one_or_none()
+                user = db.session.execute(
+                    db.select(User).where(User.email == customer_email)
+                ).scalar_one_or_none()
                 if user:
-                    plan = "paid"
-                    user.plan = plan
+                    if customer_id and not user.stripe_customer_id:
+                        user.stripe_customer_id = customer_id
+                    user.plan = "paid"
                     db.session.commit()
-                    print(f"Upgraded user {customer_email} to {plan}", flush=True)
+                    print(f"Upgraded user {customer_email} to paid", flush=True)
+        elif event and event_type == "customer.subscription.deleted":
+            sub = event["data"]["object"]
+            cust_id = sub.get("customer")
+            if cust_id:
+                user = db.session.execute(db.select(User).where(User.stripe_customer_id == cust_id)).scalar_one_or_none()
+                if user:
+                    user.plan = "free"
+                    db.session.commit()
+                    print(f"Downgraded user {user.email} to free", flush=True)
         return jsonify({"ok": True})
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        import traceback; traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 @app.route("/webhook/marketplace", methods=["POST"])
 def marketplace_webhook():
-    event = request.get_json()
-    action = event.get("action", "")
-    print(f"Marketplace webhook: {action}", flush=True)
-    return jsonify({"ok": True})
+    try:
+        event = request.get_json()
+        action = event.get("action", "")
+        mp = event.get("marketplace_purchase", {})
+        purchase = mp.get("purchase", {})
+        email = purchase.get("email")
+        account_login = purchase.get("account_login") or (event.get("marketplace_purchase", {}).get("account") or {}).get("login")
+        print(f"Marketplace webhook: action={action} login={account_login} email={email}", flush=True)
+        if action in ("purchased", "free_trial_started"):
+            if not email and account_login:
+                email = f"{account_login}@users.noreply.github.com"
+            if email:
+                user = db.session.execute(
+                    db.select(User).where(User.email == email)
+                ).scalar_one_or_none()
+                if user:
+                    user.plan = "paid"
+                    db.session.commit()
+                    print(f"Marketplace: upgraded {email} to paid", flush=True)
+        elif action in ("cancelled", "pending_cancellation"):
+            if not email and account_login:
+                email = f"{account_login}@users.noreply.github.com"
+            if email:
+                user = db.session.execute(
+                    db.select(User).where(User.email == email)
+                ).scalar_one_or_none()
+                if user:
+                    user.plan = "free"
+                    db.session.commit()
+                    print(f"Marketplace: downgraded {email} to free", flush=True)
+        elif action == "plan_changed":
+            print(f"Marketplace plan_changed: {mp}", flush=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 @app.route("/logout")
 def logout():
     logout_user()
