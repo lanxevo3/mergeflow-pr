@@ -8,6 +8,8 @@ try:
     print("STEP1b stdlib OK", flush=True)
     import httpx
     print("STEP1c httpx OK", flush=True)
+    import stripe as stripe_lib
+    print("STEP1d stripe OK", flush=True)
     from flask import Flask, request, redirect, jsonify, render_template
     print("STEP1d flask OK", flush=True)
     from flask_sqlalchemy import SQLAlchemy
@@ -134,9 +136,33 @@ def delete_repo(repo_id):
 @app.route("/upgrade/<plan>")
 def upgrade(plan):
     stripe_key = app.config.get("STRIPE_SECRET_KEY", "")
-    price_map = {"individual": "https://buy.stripe.com/9RE6oI1Nm4E45pCfZB", "team": "https://buy.stripe.com/9RE6oI1Nm4E45pCfZB"}
-    url = price_map.get(plan, price_map["individual"])
-    return redirect(url)
+    plans = {
+        "individual": {"name": "MergeFlow Individual", "amount": 2900, "interval": "month"},
+        "team": {"name": "MergeFlow Team", "amount": 9900, "interval": "month"},
+    }
+    cfg = plans.get(plan, plans["individual"])
+    if not stripe_key:
+        return "Stripe not configured.", 503
+    try:
+        import stripe
+        stripe.api_key = stripe_key
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": cfg["name"]},
+                    "unit_amount": cfg["amount"],
+                    "recurring": {"interval": cfg["interval"]},
+                },
+                "quantity": 1,
+            }],
+            success_url="https://mergeflow-pr.onrender.com/dashboard?upgrade=success",
+            cancel_url="https://mergeflow-pr.onrender.com/dashboard?upgrade=cancelled",
+        )
+        return redirect(session.url)
+    except Exception as e:
+        return f"Stripe error: {str(e)}", 500
 @app.route("/webhook/stripe", methods=["POST"])
 def stripe_webhook():
     event = request.get_json()
