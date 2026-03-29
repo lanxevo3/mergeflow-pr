@@ -206,6 +206,8 @@ def upgrade(plan):
     if not stripe_key:
         return "Stripe not configured.", 503
     from flask_login import current_user
+    if not current_user.is_authenticated:
+        return redirect(url_for("login", next=request.url))
     plans = {
         "individual": {"name": "MergeFlow Individual", "amount": 2900, "interval": "month"},
         "team": {"name": "MergeFlow Team", "amount": 9900, "interval": "month"},
@@ -227,6 +229,10 @@ def upgrade(plan):
             }],
             "success_url": "https://mergeflow-pr.onrender.com/dashboard?upgrade=success",
             "cancel_url": "https://mergeflow-pr.onrender.com/dashboard?upgrade=cancelled",
+            "metadata": {
+                "user_id": str(current_user.id),
+                "user_email": current_user.email,
+            },
         }
         if current_user.is_authenticated:
             kwargs["customer_email"] = current_user.email
@@ -261,24 +267,31 @@ def stripe_webhook():
             session_obj = event["data"]["object"]
             customer_email = session_obj.get("customer_details", {}).get("email")
             customer_id = session_obj.get("customer")
-            if not customer_email and customer_id:
-                try:
-                    import stripe
-                    stripe.api_key = app.config.get("STRIPE_SECRET_KEY", "")
-                    cu = stripe.Customer.retrieve(customer_id)
-                    customer_email = cu.get("email")
-                except Exception as ex:
-                    print(f"Could not retrieve Stripe customer: {ex}", flush=True)
-            if customer_email:
+            user_id = session_obj.get("metadata", {}).get("user_id")
+            user = None
+            # First try by user_id (most reliable)
+            if user_id:
+                user = db.session.execute(
+                    db.select(User).where(User.id == int(user_id))
+                ).scalar_one_or_none()
+            # Then by email
+            if not user and customer_email:
                 user = db.session.execute(
                     db.select(User).where(User.email == customer_email)
                 ).scalar_one_or_none()
-                if user:
-                    if customer_id and not user.stripe_customer_id:
-                        user.stripe_customer_id = customer_id
-                    user.plan = "paid"
-                    db.session.commit()
-                    print(f"Upgraded user {customer_email} to paid", flush=True)
+            # Then by stripe_customer_id
+            if not user and customer_id:
+                user = db.session.execute(
+                    db.select(User).where(User.stripe_customer_id == customer_id)
+                ).scalar_one_or_none()
+            if user:
+                if customer_id and not user.stripe_customer_id:
+                    user.stripe_customer_id = customer_id
+                user.plan = "paid"
+                db.session.commit()
+                print(f"Upgraded user {user.email} to paid (via {event_type})", flush=True)
+            else:
+                print(f"checkout.session.completed: could not find user (email={customer_email} user_id={user_id})", flush=True)
         elif event and event_type == "customer.subscription.deleted":
             sub = event["data"]["object"]
             cust_id = sub.get("customer")
