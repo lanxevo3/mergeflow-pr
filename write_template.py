@@ -1,0 +1,39 @@
+html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MergeFlow Dashboard</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 1100px; margin: 0 auto; padding: 40px 24px; background: #0d1117; color: #e6edf3; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; border-bottom: 1px solid #30363d; padding-bottom: 20px; }
+    h1 { color: #58a6ff; margin: 0; font-size: 1.8em; }
+    .header-right { display: flex; gap: 10px; align-items: center; }
+    .plan-badge { background: #1f6feb; color: white; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+    .upgrade-banner { background: linear-gradient(135deg, #161b22, #1c2129); border: 1px solid #30363d; border-radius: 10px; padding: 20px 24px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+    .upgrade-banner h3 { margin: 0 0 4px; color: #58a6ff; font-size: 15px; }
+    .upgrade-banner p { margin: 0; color: #8b949e; font-size: 13px; }
+    .upgrade-btn { background: #238636; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; text-decoration: none; display: inline-block; }
+    .upgrade-btn:hover { background: #2ea043; }
+    h2 { margin-bottom: 16px; font-size: 1.2em; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+    th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid #30363d; }
+    th { color: #8b949e; font-size: 11px; text-transform: uppercase; }
+    tr:hover { background: #161b22; }
+    .status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .status.enabled { background: rgba(35,134,54,0.3); color: #3fb950; }
+    .status.disabled { background: rgba(218,54,51,0.2); color: #f85149; }
+    .btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; }
+    .btn-toggle { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+    .btn-toggle:hover { background: #30363d; }
+    .btn-danger { background: #21262d; color: #f85149; border: 1px solid #30363d; }
+    .add-section { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 24px; margin-bottom: 30px; }
+    .add-section h3 { margin: 0 0 16px; }
+    .add-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 12px; color: #8b949e; }
+    .form-group input { background: #0d1117; border: 1px solid #30363d; border-radius: 6px; padding: 8px 12px; color: #e6edf3; font-size: 14px; width: 180px; }
+    .form-group input:focus { outline: none; border-color: #58a6ff; }
+    .add-btn { background: #238636; color: white; border: none; padding: 8px 20px; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600; height: 36px; }
+    .add-btn:hover { background: #2ea043; }
+    .empty-state { text-align: center; padding: 50px 20px; background: #161b22; border-radius: 8px; border: 1px solid #30363d; margin-bottom: 30px; }
+    .empty-state h3 { color: #c9d1d9; margin: 0 0 8px; }
