@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MergeFlow Admin</title>
+<style>
+body{font-family:-apple-system,sans-serif;background:#0d1117;color:#c9d1d9;margin:0;padding:20px;font-size:14px}
+h1,h2,h3{margin:0 0 16px}
+h1{color:#3fb950;font-size:1.5em;margin-bottom:20px}
+h2{color:#e6edf3;font-size:1.1em;margin-top:28px;border-bottom:1px solid #21262d;padding-bottom:8px}
+.alert-item{background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;margin:6px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.alert-repo{background:rgba(63,185,80,0.15);color:#3fb950;padding:2px 8px;border-radius:4px;font-size:12px;font-weight:600;white-space:nowrap}
+.alert-item a{color:#58a6ff;flex:1}
+.alert-item .approvals{color:#3fb950;font-size:12px;white-space:nowrap}
+.stats{display:flex;gap:24px;margin-bottom:24px;flex-wrap:wrap}
+.stat-box{background:#161b22;border:1px solid #21262d;border-radius:8px;padding:16px 24px}
+.stat-box .n{font-size:2em;font-weight:800;color:#3fb950}
+.stat-box .l{font-size:11px;color:#6e7681;text-transform:uppercase;letter-spacing:0.05em}
+table{width:100%;border-collapse:collapse;margin-bottom:24px}
+th,td{padding:10px 12px;text-align:left;border-bottom:1px solid #21262d}
+th{color:#6e7681;font-size:11px;text-transform:uppercase;letter-spacing:0.05em}
+tr:hover td{background:#161b22}
+.badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:600}
+.paid{background:rgba(63,185,80,0.2);color:#3fb950}
+.free{background:rgba(110,118,129,0.2);color:#6e7681}
+.sub{color:#8b949e;font-size:12px}
+.expanded{margin-top:8px;padding:12px;background:#0d1117;border:1px solid #21262d;border-radius:6px}
+.expanded h4{color:#8b949e;font-size:11px;text-transform:uppercase;margin:0 0 8px}
+.expanded table{margin-bottom:0}
+.pr-row{display:flex;gap:10px;padding:4px 0;border-bottom:1px solid #21262d}
+.pr-row:last-child{border-bottom:none}
+.pr-num{color:#6e7681;min-width:40px}
+.pr-title{color:#c9d1d9;flex:1;font-size:13px}
+.pr-author{color:#6e7681;font-size:12px;min-width:80px}
+.pr-status{color:#3fb950;font-size:12px;min-width:70px}
+.pr-link{color:#58a6ff;font-size:12px}
+.toggler{background:#21262d;color:#8b
