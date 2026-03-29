@@ -10,7 +10,7 @@ try:
     print("STEP1c httpx OK", flush=True)
     import stripe as stripe_lib
     print("STEP1d stripe OK", flush=True)
-    from flask import Flask, request, redirect, jsonify, render_template, session, url_for
+    from flask import Flask, request, redirect, jsonify, render_template, render_template_string, send_from_directory, session, url_for
     print("STEP1e flask OK", flush=True)
     from flask_sqlalchemy import SQLAlchemy
     print("STEP1f sqlalchemy OK", flush=True)
@@ -431,6 +431,16 @@ def admin_api():
     except Exception as e:
         print(f"admin_api error: {e}", flush=True)
         return jsonify({"error": "internal", "detail": str(e)}), 500
+
+@app.route("/admin")
+def admin_page():
+    """HTML admin dashboard – renders admin.html, fetches /admin/api client-side."""
+    admin_key = app.config.get("ADMIN_SECRET", "")
+    provided = request.args.get("key", "")
+    if admin_key and provided != admin_key:
+        return "Unauthorized – provide ?key=ADMIN_SECRET", 403
+    return send_from_directory("templates", "admin.html")
+
 
 print("STEP5", flush=True)
 if __name__ == "__main__":
