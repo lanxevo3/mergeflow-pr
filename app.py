@@ -51,7 +51,7 @@ class Repo(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
-print("STEP4 app alive", flush=True)
+print("STEP4 app alive V2", flush=True)
 @app.route("/healthz")
 def health():
     return jsonify({"status": "ok"})
