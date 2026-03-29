@@ -108,7 +108,9 @@ def dashboard():
     if not current_user.is_authenticated:
         return redirect("/login")
     repos = db.session.execute(db.select(Repo).where(Repo.user_id == current_user.id)).scalars().all()
-    return jsonify({"user": current_user.github_username or current_user.email, "repos": [r.full_name for r in repos]})
+    return render_template("dashboard.html",
+        user=current_user.github_username or current_user.email,
+        repos=[{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled, "id": r.id} for r in repos])
 @app.route("/api/repos", methods=["POST"])
 def add_repo():
     if not current_user.is_authenticated:
