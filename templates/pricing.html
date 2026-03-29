@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Pricing - MergeFlow</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body{font-family:-apple-system,sans-serif;margin:0;padding:0;background:#0d1117;color:#e6edf3}
+.hero{text-align:center;padding:60px 20px}
+h1{font-size:2.5em;color:#58a6ff;margin-bottom:0.2em}
+.tagline{font-size:1.2em;color:#8b949e}
+.plans{display:flex;justify-content:center;gap:24px;margin:40px auto;flex-wrap:wrap;max-width:800px}
+.plan{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:40px;min-width:260px;text-align:center}
+.plan.featured{border-color:#238636}
+.plan h2{margin:0 0 8px}
+.price{font-size:3em;font-weight:700;color:#58a6ff;margin:16px 0}
+.price span{font-size:0.35em;color:#8b949e;font-weight:400}
+.features{text-align:left;padding:0 20px;color:#8b949e}
+.features li{margin:8px 0}
+.cta{display:inline-block;background:#238636;color:white;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:16px}
+.cta:hover{background:#2ea043}
+footer{text-align:center;padding:40px;color:#484f58;font-size:0.85em}
+</style>
+</head>
+<body>
+<div class="hero">
+    <h1>Simple Pricing</h1>
+    <p class="tagline">No per-repo fees. No surprises. Cancel anytime.</p>
+</div>
+<div class="plans">
+    <div class="plan">
+        <h2>Free Trial</h2>
+        <p class="price">$0<span>/mo</span></p>
+        <ul class="features">
+            <li>1 repository</li>
+            <li>Dry-run mode only</li>
+            <li>7 day trial</li>
+            <li>Community support</li>
+        </ul>
+        <a href="/login" class="cta">Start Free</a>
+    </div>
+    <div class="plan featured">
+        <h2>Individual</h2>
+        <p class="price">$29<span>/mo</span></p>
+        <ul class="features">
+            <li>Unlimited repositories</li>
+            <li>Auto-merge with dry-run</li>
+            <li>Audit log</li>
+            <li>Email support</li>
+        </ul>
+        <a href="/upgrade/individual" class="cta">Get Started</a>
+    </div>
+    <div class="plan">
+        <h2>Team</h2>
+        <p class="price">$99<span>/mo</span></p>
+        <ul class="features">
+            <li>Everything in Individual</li>
+            <li>Team seat management</li>
+            <li>Slack notifications</li>
+            <li>Priority support</li>
+        </ul>
+        <a href="/upgrade/team" class="cta">Get Started</a>
+    </div>
+</div>
+<footer>
+    Questions? Email support@mergeflow.ai<br>
+    &copy; 2026 MergeFlow
+</footer>
+</body>
+</html>
