@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """MergeFlow - GitHub PR Auto-Merge SaaS API (Flask)"""
-import json, os, uuid, subprocess
+import json, os, uuid, subprocess, sys
 from datetime import datetime, timedelta
 
 import httpx
@@ -233,7 +233,11 @@ def trigger_scan(repo_id):
 # ─── Init DB ──────────────────────────────────────────────────────────────────
 
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+        app.logger.info("Database tables ready")
+    except Exception as e:
+        app.logger.warning(f"DB init skipped (may be missing env vars): {e}")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
