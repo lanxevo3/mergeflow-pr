@@ -49,7 +49,7 @@ class Repo(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
-print("STEP4", flush=True)
+print("STEP4 app alive", flush=True)
 @app.route("/healthz")
 def health():
     return jsonify({"status": "ok"})
@@ -62,7 +62,47 @@ def login():
     return redirect("https://github.com/login/oauth/authorize?client_id=" + cid + "&scope=repo,admin:repo_hook")
 @app.route("/github/callback")
 def oauth_callback():
-    return jsonify({"error": "callback stub"}), 500
+    code = request.args.get("code")
+    if not code:
+        return jsonify({"error": "Missing OAuth code"}), 400
+    try:
+        resp = httpx.post(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": app.config["GITHUB_CLIENT_ID"],
+                "client_secret": app.config["GITHUB_CLIENT_SECRET"],
+                "code": code,
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        )
+        token_data = resp.json()
+        token = token_data.get("access_token")
+        if not token:
+            return jsonify({"error": "No access token from GitHub", "detail": token_data}), 400
+        gh_resp = httpx.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            timeout=15,
+        )
+        gh_user = gh_resp.json()
+        login_name = gh_user.get("login") or gh_user.get("name", "unknown")
+        email = gh_user.get("email") or f"{login_name}@users.noreply.github.com"
+        user = db.session.execute(
+            db.select(User).where(User.email == email)
+        ).scalar_one_or_none()
+        if not user:
+            user = User(email=email, github_username=login_name, plan="free")
+            db.session.add(user)
+        else:
+            user.github_username = login_name
+        db.session.commit()
+        login_user(user)
+        return redirect("/dashboard")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 @app.route("/dashboard")
 def dashboard():
     if not current_user.is_authenticated:
