@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """MergeFlow - GitHub PR Auto-Merge SaaS API (Flask)"""
 import json, os, uuid, subprocess, sys
+
+print("APP STARTING...", flush=True)
+print(f"PYTHON: {sys.version}", flush=True)
+print(f"WORKING DIR: {os.getcwd()}", flush=True)
+print(f"TEMPLATE DIR: {os.path.join(os.path.dirname(__file__), 'templates')}", flush=True)
+print(f"DATABASE_URL set: {bool(os.getenv('DATABASE_URL'))}", flush=True)
 from datetime import datetime, timedelta
 
 import httpx
@@ -240,4 +246,11 @@ with app.app_context():
         app.logger.warning(f"DB init skipped (may be missing env vars): {e}")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    try:
+        print("STARTING Flask server on 0.0.0.0:8000", flush=True)
+        app.run(host="0.0.0.0", port=8000)
+    except Exception as e:
+        import traceback
+        print(f"STARTUP FAILED: {e}", flush=True)
+        traceback.print_exc()
+        sys.exit(1)
