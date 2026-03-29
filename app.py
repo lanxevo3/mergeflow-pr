@@ -119,6 +119,15 @@ def add_repo():
     repo = Repo(user_id=current_user.id, full_name=data.get("full_name",""), branch=data.get("branch","main"))
     db.session.add(repo)
     db.session.commit()
+@app.route("/webhook/marketplace", methods=["POST"])
+def marketplace_webhook():
+    event = request.get_json()
+    action = event.get("action", "")
+    if action in ("purchased", "cancelled", "changed"):
+        print(f"Marketplace webhook: {action}", flush=True)
+    return jsonify({"ok": True})
+
+
     return jsonify({"ok": True})
 print("STEP5", flush=True)
 if __name__ == "__main__":
