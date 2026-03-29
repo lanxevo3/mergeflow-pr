@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
 """MergeFlow - GitHub PR Auto-Merge SaaS API (Flask)"""
 import json, os, uuid, subprocess, sys
-
-print("APP STARTING...", flush=True)
-print(f"PYTHON: {sys.version}", flush=True)
-print(f"WORKING DIR: {os.getcwd()}", flush=True)
-print(f"TEMPLATE DIR: {os.path.join(os.path.dirname(__file__), 'templates')}", flush=True)
-print(f"DATABASE_URL set: {bool(os.getenv('DATABASE_URL'))}", flush=True)
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import httpx
-from flask import Flask, request, redirect, jsonify, make_response, render_template, abort
+from flask import Flask, request, redirect, jsonify, render_template, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
+print("=== MERGEFLOW STARTUP ===", flush=True)
+print(f"PYTHON: {sys.version}", flush=True)
+print(f"WORKING DIR: {os.getcwd()}", flush=True)
+
 app = Flask(__name__)
 app.config.from_object("config")
+
+print(f"DATABASE_URL: {bool(app.config.get('DATABASE_URL'))}", flush=True)
+print(f"GITHUB_CLIENT_ID: {bool(app.config.get('GITHUB_CLIENT_ID'))}", flush=True)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -81,48 +82,44 @@ def oauth_callback():
     code = request.args.get("code") or request.form.get("code")
     if not code:
         abort(400, "Missing OAuth code")
-
-    # Exchange code for access token
-    resp = httpx.post(
-        "https://github.com/login/oauth/access_token",
-        data={
-            "client_id": app.config["GITHUB_CLIENT_ID"],
-            "client_secret": app.config["GITHUB_CLIENT_SECRET"],
-            "code": code,
-        },
-        headers={"Accept": "application/json"},
-        timeout=10,
-    )
-    data = resp.json()
-    token = data.get("access_token")
-    if not token:
-        abort(400, "GitHub OAuth failed")
-
-    # Get GitHub user info
-    gh = httpx.get(
-        "https://api.github.com/user",
-        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-        timeout=10,
-    )
-    gh_user = gh.json()
-    login_name = gh_user.get("login") or gh_user.get("name", "unknown")
-    email = gh_user.get("email") or f"{login_name}@users.noreply.github.com"
-
-    # Find or create user
-    user = db.session.execute(
-        db.select(User).where(User.email == email)
-    ).scalar_one_or_none()
-
-    if not user:
-        user = User(email=email, github_username=login_name, plan="free")
-        db.session.add(user)
-    else:
-        user.github_username = login_name
-
-    db.session.commit()
-    login_user(user)
-
-    return redirect("/dashboard")
+    try:
+        resp = httpx.post(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": app.config["GITHUB_CLIENT_ID"],
+                "client_secret": app.config["GITHUB_CLIENT_SECRET"],
+                "code": code,
+            },
+            headers={"Accept": "application/json"},
+            timeout=10,
+        )
+        data = resp.json()
+        token = data.get("access_token")
+        if not token:
+            abort(400, "GitHub OAuth failed")
+        gh = httpx.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            timeout=10,
+        )
+        gh_user = gh.json()
+        login_name = gh_user.get("login") or gh_user.get("name", "unknown")
+        email = gh_user.get("email") or f"{login_name}@users.noreply.github.com"
+        user = db.session.execute(
+            db.select(User).where(User.email == email)
+        ).scalar_one_or_none()
+        if not user:
+            user = User(email=email, github_username=login_name, plan="free")
+            db.session.add(user)
+        else:
+            user.github_username = login_name
+        db.session.commit()
+        login_user(user)
+        return redirect("/dashboard")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/logout")
 @login_required
@@ -137,21 +134,9 @@ def dashboard():
     repos = db.session.execute(
         db.select(Repo).where(Repo.user_id == current_user.id)
     ).scalars().all()
-    plan_display = {
-        "free": "Free Trial",
-        "individual": "Individual — $29/mo",
-        "team": "Team — $99/mo",
-    }.get(current_user.plan or "free", "Free Trial")
-    repos_list = [
-        {"id": r.id, "Name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled}
-        for r in repos
-    ]
-    return render_template(
-        "dashboard.html",
-        user=current_user,
-        plan=plan_display,
-        repos=repos_list,
-    )
+    plan_display = {"free": "Free Trial", "individual": "Individual -- USD29/mo", "team": "Team -- USD99/mo"}.get(current_user.plan or "free", "Free Trial")
+    return render_template("dashboard.html", user=current_user, plan=plan_display,
+        repos=[{"id": r.id, "name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled} for r in repos])
 
 @app.route("/api/repos", methods=["POST"])
 def add_repo():
@@ -159,16 +144,12 @@ def add_repo():
         return jsonify({"error": "Not authenticated"}), 401
     data = request.get_json() or {}
     full_name = data.get("full_name")
-    branch = data.get("branch", "main")
-    min_approvals = int(data.get("min_approvals", 1))
     if not full_name:
         return jsonify({"error": "full_name required"}), 400
-    repo_count = db.session.execute(
-        db.select(db.func.count()).select_from(Repo).where(Repo.user_id == current_user.id)
-    ).scalar()
+    repo_count = db.session.execute(db.select(db.func.count()).select_from(Repo).where(Repo.user_id == current_user.id)).scalar()
     if current_user.plan == "free" and repo_count >= 1:
-        return jsonify({"error": "Free plan limited to 1 repo. Upgrade at /upgrade/individual"}), 403
-    repo = Repo(user_id=current_user.id, full_name=full_name, branch=branch, min_approvals=min_approvals)
+        return jsonify({"error": "Free plan limited to 1 repo"}), 403
+    repo = Repo(user_id=current_user.id, full_name=full_name, branch=data.get("branch","main"), min_approvals=int(data.get("min_approvals",1)))
     db.session.add(repo)
     db.session.commit()
     return jsonify({"ok": True, "repo": full_name})
@@ -177,9 +158,7 @@ def add_repo():
 def toggle_repo(repo_id):
     if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    repo = db.session.execute(
-        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
-    ).scalar_one_or_none()
+    repo = db.session.execute(db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)).scalar_one_or_none()
     if not repo:
         return jsonify({"error": "Repo not found"}), 404
     repo.auto_merge_enabled = not repo.auto_merge_enabled
@@ -190,9 +169,7 @@ def toggle_repo(repo_id):
 def delete_repo(repo_id):
     if not current_user.is_authenticated:
         return jsonify({"error": "Not authenticated"}), 401
-    repo = db.session.execute(
-        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
-    ).scalar_one_or_none()
+    repo = db.session.execute(db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)).scalar_one_or_none()
     if not repo:
         return jsonify({"error": "Repo not found"}), 404
     db.session.delete(repo)
@@ -212,45 +189,15 @@ def stripe_webhook():
     if event.get("type") == "checkout.session.completed":
         customer_id = event["data"]["object"]["customer"]
         plan = event["data"]["object"]["metadata"].get("plan", "individual")
-        user = db.session.execute(
-            db.select(User).where(User.stripe_customer_id == customer_id)
-        ).scalar_one_or_none()
+        user = db.session.execute(db.select(User).where(User.stripe_customer_id == customer_id)).scalar_one_or_none()
         if user:
             user.plan = plan
             db.session.commit()
     return jsonify({"ok": True})
 
-@app.route("/api/scan/<int:repo_id>", methods=["POST"])
-def trigger_scan(repo_id):
-    if not current_user.is_authenticated:
-        return jsonify({"error": "Not authenticated"}), 401
-    repo = db.session.execute(
-        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
-    ).scalar_one_or_none()
-    if not repo:
-        return jsonify({"error": "Repo not found"}), 404
-    result = subprocess.run(
-        ["python", "auto_merge.py", repo.full_name, "--dry-run"],
-        capture_output=True, text=True,
-        cwd=os.path.dirname(os.path.abspath(__file__)),
-    )
-    return jsonify({"ok": True, "stdout": result.stdout, "stderr": result.stderr})
-
-# ─── Init DB ──────────────────────────────────────────────────────────────────
-
-with app.app_context():
-    try:
-        db.create_all()
-        app.logger.info("Database tables ready")
-    except Exception as e:
-        app.logger.warning(f"DB init skipped (may be missing env vars): {e}")
-
+# ─── Start Server ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    try:
-        print("STARTING Flask server on 0.0.0.0:8000", flush=True)
-        app.run(host="0.0.0.0", port=8000)
-    except Exception as e:
-        import traceback
-        print(f"STARTUP FAILED: {e}", flush=True)
-        traceback.print_exc()
-        sys.exit(1)
+    print("Creating DB tables...", flush=True)
+    db.create_all()
+    print("Starting Flask on 0.0.0.0:8000", flush=True)
+    app.run(host="0.0.0.0", port=8000)
