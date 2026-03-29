@@ -10,7 +10,7 @@ try:
     print("STEP1c httpx OK", flush=True)
     import stripe as stripe_lib
     print("STEP1d stripe OK", flush=True)
-    from flask import Flask, request, redirect, jsonify, render_template, session
+    from flask import Flask, request, redirect, jsonify, render_template, session, url_for
     print("STEP1e flask OK", flush=True)
     from flask_sqlalchemy import SQLAlchemy
     print("STEP1f sqlalchemy OK", flush=True)
