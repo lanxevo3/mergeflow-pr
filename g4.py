@@ -1,5 +1,0 @@
-p=r'C:\Users\lanxe\Singularity\external\openclaw_fresh\workspace\pr-merge-saas\templates\dashboard.html'
-o=open(p,'a',encoding='utf-8')
-o.write('<div class="addbox"><h3>Add Repository</h3><form class="formrow" onsubmit="addRepo(event)"><div class="fld"><label>Owner / repo</label><input name="full_name" placeholder="owner/repo" required></div><div class="fld"><label>Branch</label><input name="branch" placeholder="main" value="main"></div><button type="submit" class="sub">Add Repo</button></form></div>')
-o.write('<div class="footer">MergeFlow -- Auto-merge your PRs with confidence</div>')
-o.write('<script>async function delRepo(id){if(!confirm("Remove this repo?"))return;let r=await fetch("/api/repos/"+id,{method:"DELETE"});if(r.ok)window.location.reload();}async function addRepo(e){e.preventDefault();let f=new FormData(e.target);let r=await fetch("/api/repos",{method:"POST",body:JSON.stringify({full_name:f.get("full_name"),branch:f.get("branch")}),headers:{"Content-Type":"application/json"}});if(r.ok)window.location.reload();}</script></body></html>')
