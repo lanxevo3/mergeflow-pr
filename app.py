@@ -113,7 +113,8 @@ def dashboard():
     plan = current_user.plan or "Free Trial"
     user = current_user.github_username or current_user.email
     repos_data = [{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled, "id": r.id} for r in repos]
-    return render_template("dashboard.html", plan=plan, user=user, repos=repos_data)
+    upgrade_msg = request.args.get("upgrade", "")
+    return render_template("dashboard.html", plan=plan, user=user, repos=repos_data, upgrade_msg=upgrade_msg)
 @app.route("/api/repos", methods=["POST"])
 def add_repo():
     if not current_user.is_authenticated:
@@ -165,8 +166,24 @@ def upgrade(plan):
         return f"Stripe error: {str(e)}", 500
 @app.route("/webhook/stripe", methods=["POST"])
 def stripe_webhook():
-    event = request.get_json()
-    return jsonify({"ok": True})
+    try:
+        event = request.get_json()
+        print(f"Stripe webhook: {event.get('type')}", flush=True)
+        if event.get("type") == "checkout.session.completed":
+            session = event["data"]["object"]
+            customer_email = session.get("customer_details", {}).get("email")
+            if customer_email:
+                user = db.session.execute(db.select(User).where(User.email == customer_email)).scalar_one_or_none()
+                if user:
+                    plan = "paid"
+                    user.plan = plan
+                    db.session.commit()
+                    print(f"Upgraded user {customer_email} to {plan}", flush=True)
+        return jsonify({"ok": True})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 @app.route("/webhook/marketplace", methods=["POST"])
 def marketplace_webhook():
     event = request.get_json()
