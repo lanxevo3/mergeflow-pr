@@ -1,10 +1,9 @@
 import os
-from pydantic_settings import BaseSettings
 
 def _load_secrets():
-    """Load secrets from .secrets file."""
     secrets = {}
-    secrets_path = os.path.join(os.path.dirname(__file__), "..", ".secrets")
+    base = os.path.dirname(os.path.abspath(__file__))
+    secrets_path = os.path.join(base, "..", ".secrets")
     if os.path.exists(secrets_path):
         with open(secrets_path) as f:
             for line in f:
@@ -16,29 +15,23 @@ def _load_secrets():
 
 _SECRETS = _load_secrets()
 
-class Settings(BaseSettings):
-    # App
-    app_name: str = "MergeFlow"
-    app_url: str = "https://mergeflow.ai"
-    debug: bool = False
+class Config:
+    APP_NAME = "MergeFlow"
+    APP_URL = "https://mergeflow.ai"
+    DEBUG = False
 
-    # Database
-    database_url: str = _SECRETS.get("DATABASE_URL", os.getenv("DATABASE_URL", "postgresql://user:pass@localhost:5432/mergeflow"))
+    DATABASE_URL = _SECRETS.get("DATABASE_URL") or os.getenv(
+        "DATABASE_URL",
+        "postgresql://user:pass@localhost:5432/mergeflow"
+    )
+    SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Stripe
-    stripe_secret_key: str = _SECRETS.get("STRIPE_SECRET_KEY", os.getenv("STRIPE_SECRET_KEY", ""))
-    stripe_webhook_secret: str = _SECRETS.get("STRIPE_WEBHOOK_SECRET", os.getenv("STRIPE_WEBHOOK_SECRET", ""))
+    STRIPE_SECRET_KEY = _SECRETS.get("STRIPE_SECRET_KEY") or os.getenv("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = _SECRETS.get("STRIPE_WEBHOOK_SECRET") or os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
-    # GitHub OAuth
-    github_client_id: str = _SECRETS.get("GITHUB_CLIENT_ID", os.getenv("GITHUB_CLIENT_ID", ""))
-    github_client_secret: str = _SECRETS.get("GITHUB_CLIENT_SECRET", os.getenv("GITHUB_CLIENT_SECRET", ""))
+    GITHUB_CLIENT_ID = _SECRETS.get("GITHUB_CLIENT_ID") or os.getenv("GITHUB_CLIENT_ID", "")
+    GITHUB_CLIENT_SECRET = _SECRETS.get("GITHUB_CLIENT_SECRET") or os.getenv("GITHUB_CLIENT_SECRET", "")
 
-    # Session
-    secret_key: str = _SECRETS.get("SECRET_KEY", os.getenv("SECRET_KEY", "dev-secret-change-in-production"))
-    session_lifetime_hours: int = 720
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-
-settings = Settings()
+    SECRET_KEY = _SECRETS.get("SECRET_KEY") or os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+    SESSION_LIFETIME_HOURS = 720

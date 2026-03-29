@@ -1,161 +1,239 @@
 #!/usr/bin/env python3
-"""MergeFlow - GitHub PR Auto-Merge SaaS API"""
-import json, os, uuid
+"""MergeFlow - GitHub PR Auto-Merge SaaS API (Flask)"""
+import json, os, uuid, subprocess
 from datetime import datetime, timedelta
-from typing import Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlmodel import Session, create_engine, select
+from flask import Flask, request, redirect, jsonify, make_response, render_template, abort
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
-from config import settings
-from models import User, Repo, MergeLog
+app = Flask(__name__)
+app.config.from_object("config")
 
-engine = create_engine(settings.database_url, echo=False)
+db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
 
-def get_db():
-    with Session(engine) as session:
-        yield session
-
-app = FastAPI(title="MergeFlow", version="1.0.0")
 _sessions = {}
 
-def get_session_id(request: Request) -> Optional[str]:
-    return request.cookies.get("session_id")
+# ─── Models ───────────────────────────────────────────────────────────────────
 
-def get_user(session_id: Optional[str] = None, db: Session = Depends(get_db)) -> Optional[User]:
-    if not session_id:
-        return None
-    s = _sessions.get(session_id)
-    if not s or s["expires"] < datetime.utcnow():
-        _sessions.pop(session_id, None)
-        return None
-    return db.get(User, s["user_id"])
+class User(db.Model, UserMixin):
+    __tablename__ = "users"
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(255), unique=True, nullable=False)
+    github_username = db.Column(db.String(255))
+    plan = db.Column(db.String(50), default="free")
+    stripe_customer_id = db.Column(db.String(255))
 
-@app.get("/healthz")
-async def health():
-    return {"status": "ok"}
+class Repo(db.Model):
+    __tablename__ = "repos"
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    full_name = db.Column(db.String(255), nullable=False)
+    branch = db.Column(db.String(100), default="main")
+    min_approvals = db.Column(db.Integer, default=1)
+    auto_merge_enabled = db.Column(db.Boolean, default=True)
 
-@app.get("/")
-async def root():
-    with open("templates/landing.html") as f:
-        return HTMLResponse(content=f.read())
+class MergeLog(db.Model):
+    __tablename__ = "merge_logs"
+    id = db.Column(db.Integer, primary_key=True)
+    repo_id = db.Column(db.Integer, db.ForeignKey("repos.id"), nullable=False)
+    pr_number = db.Column(db.Integer)
+    status = db.Column(db.String(50))
+    merged_at = db.Column(db.DateTime, default=datetime.utcnow)
+    error_message = db.Column(db.Text)
 
-@app.get("/login")
-async def login():
-    client_id = settings.github_client_id
+# ─── Login Manager ────────────────────────────────────────────────────────────
+
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
+
+# ─── Routes ───────────────────────────────────────────────────────────────────
+
+@app.route("/healthz")
+def health():
+    return jsonify({"status": "ok"})
+
+@app.route("/")
+def root():
+    return render_template("landing.html")
+
+@app.route("/login")
+def login():
+    client_id = app.config.get("GITHUB_CLIENT_ID")
     if not client_id:
-        return {"error": "GitHub OAuth not configured"}
+        return jsonify({"error": "GitHub OAuth not configured"}), 500
     scope = "repo,admin:repo_hook"
-    url = "https://github.com/login/oauth/authorize?client_id=" + client_id + "&scope=" + scope
-    return RedirectResponse(url=url, status_code=302)
+    return redirect(f"https://github.com/login/oauth/authorize?client_id={client_id}&scope={scope}")
 
-@app.get("/oauth/callback")
-async def oauth_callback(code: str = Form(...), db: Session = Depends(get_db)):
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            "https://github.com/login/oauth/access_token",
-            data={"client_id": settings.github_client_id, "client_secret": settings.github_client_secret, "code": code},
-            headers={"Accept": "application/json"},
-        )
+@app.route("/github/callback")
+def oauth_callback():
+    code = request.args.get("code") or request.form.get("code")
+    if not code:
+        abort(400, "Missing OAuth code")
+
+    # Exchange code for access token
+    resp = httpx.post(
+        "https://github.com/login/oauth/access_token",
+        data={
+            "client_id": app.config["GITHUB_CLIENT_ID"],
+            "client_secret": app.config["GITHUB_CLIENT_SECRET"],
+            "code": code,
+        },
+        headers={"Accept": "application/json"},
+        timeout=10,
+    )
     data = resp.json()
     token = data.get("access_token")
     if not token:
-        raise HTTPException(400, "GitHub OAuth failed")
-    async with httpx.AsyncClient() as client:
-        gh = await client.get("https://api.github.com/user", headers={"Authorization": "Bearer " + token})
+        abort(400, "GitHub OAuth failed")
+
+    # Get GitHub user info
+    gh = httpx.get(
+        "https://api.github.com/user",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        timeout=10,
+    )
     gh_user = gh.json()
-    login_name = gh_user["login"]
-    email = gh_user.get("email") or (login_name + "@users.noreply.github.com")
-    user = db.exec(select(User).where(User.email == email)).first()
+    login_name = gh_user.get("login") or gh_user.get("name", "unknown")
+    email = gh_user.get("email") or f"{login_name}@users.noreply.github.com"
+
+    # Find or create user
+    user = db.session.execute(
+        db.select(User).where(User.email == email)
+    ).scalar_one_or_none()
+
     if not user:
         user = User(email=email, github_username=login_name, plan="free")
-        db.add(user)
+        db.session.add(user)
     else:
         user.github_username = login_name
-    db.commit()
-    db.refresh(user)
-    sid = str(uuid.uuid4())
-    _sessions[sid] = {"user_id": user.id, "expires": datetime.utcnow() + timedelta(hours=settings.session_lifetime_hours)}
-    resp = RedirectResponse(url="/dashboard", status_code=302)
-    resp.set_cookie(key="session_id", value=sid, httponly=True, samesite="lax", max_age=settings.session_lifetime_hours * 3600)
-    return resp
 
-@app.get("/dashboard")
-async def dashboard(request: Request, db: Session = Depends(get_db)):
-    user = get_user(get_session_id(request), db)
-    if not user:
-        return RedirectResponse(url="/login", status_code=302)
-    repos = db.exec(select(Repo).where(Repo.user_id == user.id)).all()
-    plan_display = {"free": "Free Trial", "individual": "Individual 29/mo", "team": "Team 99/mo"}.get(user.plan or "free", "Free Trial")
-    repos_list = [{"name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled} for r in repos]
-    return {"user": user.github_username or user.email, "plan": plan_display, "repos": repos_list}
+    db.session.commit()
+    login_user(user)
 
-@app.post("/api/repos")
-async def add_repo(request: Request, full_name: str = Form(...),
-    branch: str = Form("main"),
-    min_approvals: int = Form(1),
-    db: Session = Depends(get_db)
-):
-    user = get_user(get_session_id(request), db)
-    if not user:
-        raise HTTPException(401, "Not authenticated")
-    repo_count = len(db.exec(select(Repo).where(Repo.user_id == user.id)).all())
-    if user.plan == "free" and repo_count >= 1:
-        raise HTTPException(403, "Free plan limited to 1 repo. Upgrade at /upgrade/individual")
-    repo = Repo(user_id=user.id, full_name=full_name, branch=branch, min_approvals=min_approvals)
-    db.add(repo)
-    db.commit()
-    return {"ok": True, "repo": full_name}
+    return redirect("/dashboard")
 
-@app.get("/api/repos/{repo_id}/toggle")
-async def toggle_repo(repo_id: str, request: Request, db: Session = Depends(get_db)):
-    user = get_user(get_session_id(request), db)
-    if not user:
-        raise HTTPException(401, "Not authenticated")
-    repo = db.exec(select(Repo).where(Repo.id == repo_id, Repo.user_id == user.id)).first()
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect("/")
+
+@app.route("/dashboard")
+def dashboard():
+    if not current_user.is_authenticated:
+        return redirect("/login")
+    repos = db.session.execute(
+        db.select(Repo).where(Repo.user_id == current_user.id)
+    ).scalars().all()
+    plan_display = {
+        "free": "Free Trial",
+        "individual": "Individual — $29/mo",
+        "team": "Team — $99/mo",
+    }.get(current_user.plan or "free", "Free Trial")
+    repos_list = [
+        {"id": r.id, "Name": r.full_name, "branch": r.branch, "enabled": r.auto_merge_enabled}
+        for r in repos
+    ]
+    return render_template(
+        "dashboard.html",
+        user=current_user,
+        plan=plan_display,
+        repos=repos_list,
+    )
+
+@app.route("/api/repos", methods=["POST"])
+def add_repo():
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Not authenticated"}), 401
+    data = request.get_json() or {}
+    full_name = data.get("full_name")
+    branch = data.get("branch", "main")
+    min_approvals = int(data.get("min_approvals", 1))
+    if not full_name:
+        return jsonify({"error": "full_name required"}), 400
+    repo_count = db.session.execute(
+        db.select(db.func.count()).select_from(Repo).where(Repo.user_id == current_user.id)
+    ).scalar()
+    if current_user.plan == "free" and repo_count >= 1:
+        return jsonify({"error": "Free plan limited to 1 repo. Upgrade at /upgrade/individual"}), 403
+    repo = Repo(user_id=current_user.id, full_name=full_name, branch=branch, min_approvals=min_approvals)
+    db.session.add(repo)
+    db.session.commit()
+    return jsonify({"ok": True, "repo": full_name})
+
+@app.route("/api/repos/<int:repo_id>/toggle", methods=["POST"])
+def toggle_repo(repo_id):
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Not authenticated"}), 401
+    repo = db.session.execute(
+        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not repo:
-        raise HTTPException(404, "Repo not found")
+        return jsonify({"error": "Repo not found"}), 404
     repo.auto_merge_enabled = not repo.auto_merge_enabled
-    db.commit()
-    return {"ok": True, "enabled": repo.auto_merge_enabled}
+    db.session.commit()
+    return jsonify({"ok": True, "enabled": repo.auto_merge_enabled})
 
-@app.get("/upgrade/{plan}")
-async def upgrade(plan: str):
+@app.route("/api/repos/<int:repo_id>", methods=["DELETE"])
+def delete_repo(repo_id):
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Not authenticated"}), 401
+    repo = db.session.execute(
+        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if not repo:
+        return jsonify({"error": "Repo not found"}), 404
+    db.session.delete(repo)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+@app.route("/upgrade/<plan>")
+def upgrade(plan):
     if plan not in ("individual", "team"):
-        raise HTTPException(400, "Invalid plan")
-    return RedirectResponse(url="https://buy.stripe.com/9RE6oI1Nm4E45pCfZB", status_code=302)
+        return jsonify({"error": "Invalid plan"}), 400
+    return redirect("https://buy.stripe.com/9RE6oI1Nm4E45pCfZB")
 
-@app.post("/webhook/stripe")
-async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
-    payload = await request.body()
+@app.route("/webhook/stripe", methods=["POST"])
+def stripe_webhook():
+    payload = request.get_data(as_text=True)
     event = json.loads(payload)
     if event.get("type") == "checkout.session.completed":
         customer_id = event["data"]["object"]["customer"]
         plan = event["data"]["object"]["metadata"].get("plan", "individual")
-        user = db.exec(select(User).where(User.stripe_customer_id == customer_id)).first()
+        user = db.session.execute(
+            db.select(User).where(User.stripe_customer_id == customer_id)
+        ).scalar_one_or_none()
         if user:
             user.plan = plan
-            db.commit()
-    return {"ok": True}
+            db.session.commit()
+    return jsonify({"ok": True})
 
-@app.get("/api/scan/{repo_id}")
-async def trigger_scan(repo_id: str, request: Request, db: Session = Depends(get_db)):
-    user = get_user(get_session_id(request), db)
-    if not user:
-        raise HTTPException(401, "Not authenticated")
-    repo = db.exec(select(Repo).where(Repo.id == repo_id, Repo.user_id == user.id)).first()
+@app.route("/api/scan/<int:repo_id>", methods=["POST"])
+def trigger_scan(repo_id):
+    if not current_user.is_authenticated:
+        return jsonify({"error": "Not authenticated"}), 401
+    repo = db.session.execute(
+        db.select(Repo).where(Repo.id == repo_id, Repo.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not repo:
-        raise HTTPException(404, "Repo not found")
-    import subprocess, os as os_module
+        return jsonify({"error": "Repo not found"}), 404
     result = subprocess.run(
         ["python", "auto_merge.py", repo.full_name, "--dry-run"],
         capture_output=True, text=True,
-        cwd=os_module.path.dirname(os_module.path.abspath(__file__))
+        cwd=os.path.dirname(os.path.abspath(__file__)),
     )
-    return {"ok": True, "stdout": result.stdout, "stderr": result.stderr}
+    return jsonify({"ok": True, "stdout": result.stdout, "stderr": result.stderr})
+
+# ─── Init DB ──────────────────────────────────────────────────────────────────
+
+with app.app_context():
+    db.create_all()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    app.run(host="0.0.0.0", port=8000)

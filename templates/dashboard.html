@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>MergeFlow — Dashboard</title>
+  <style>
+    body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #0d1117; color: #e6edf3; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+    h1 { color: #58a6ff; }
+    .plan { background: #1f6feb; padding: 4px 12px; border-radius: 20px; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid #30363d; }
+    th { color: #8b949e; font-size: 12px; text-transform: uppercase; }
+    .btn { padding: 6px 14px; border-radius: 6px; text-decoration: none; font-size: 14px; cursor: pointer; border: none; }
+    .btn-danger { background: #da3633; color: white; }
+    .btn-primary { background: #238636; color: white; }
+    .add-form { background: #161b22; padding: 20px; border-radius: 8px; margin-top: 30px; }
+    .add-form input { padding: 8px 12px; border-radius: 6px; border: 1px solid #30363d; background: #0d1117; color: #e6edf3; width: 200px; margin-right: 10px; }
+    .add-form button { background: #238636; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MergeFlow</h1>
+    <div>
+      <span class="plan">{{ plan }}</span>
+      <a href="/logout" class="btn btn-danger" style="margin-left:10px;">Logout</a>
+    </div>
+  </header>
+
+  <h2>Your Repositories</h2>
+  {% if repos %}
+  <table>
+    <thead>
+      <tr>
+        <th>Repository</th>
+        <th>Branch</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for repo in repos %}
+      <tr>
+        <td>{{ repo.Name }}</td>
+        <td>{{ repo.branch }}</td>
+        <td>{{ 'Enabled' if repo.enabled else 'Disabled' }}</td>
+        <td>
+          <button class="btn btn-primary toggle-btn" data-id="{{ repo.id }}">Toggle</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:#8b949e;">No repos added yet. Add your first repo below.</p>
+  {% endif %}
+
+  <div class="add-form">
+    <h3>Add Repository</h3>
+    <form id="addRepoForm">
+      <input type="text" name="full_name" placeholder="owner/repo" required>
+      <input type="text" name="branch" placeholder="branch" value="main">
+      <button type="submit">Add Repo</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('addRepoForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const res = await fetch('/api/repos', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(Object.fromEntries(fd)) });
+      if (res.ok) location.reload();
+      else alert(await res.text());
+    });
+    document.querySelectorAll('.toggle-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        await fetch(`/api/repos/${id}/toggle`, { method: 'POST' });
+        location.reload();
+      });
+    });
+  </script>
+</body>
+</html>
