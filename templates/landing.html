@@ -1,70 +1,148 @@
-﻿<!DOCTYPE html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MergeFlow - GitHub PR Auto-Merge</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{font-family:-apple-system,sans-serif;margin:0;padding:0;background:#0d1117;color:#e6edf3}
-.hero{text-align:center;padding:80px 20px}
-h1{font-size:3em;margin-bottom:0.2em;color:#58a6ff}
-.tagline{font-size:1.3em;color:#8b949e;margin-bottom:1em}
-.cta{display:inline-block;background:#238636;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:1.1em}
-.cta:hover{background:#2ea043}
-.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;max-width:900px;margin:40px auto;padding:0 20px}
-.feature{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:24px}
-.feature h3{margin:0 0 8px;color:#58a6ff}
-.feature p{margin:0;color:#8b949e;font-size:0.95em;line-height:1.5}
-.pricing{display:flex;justify-content:center;gap:20px;margin:40px 0;flex-wrap:wrap}
-.plan{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:28px;min-width:200px;text-align:center}
-.plan h3{margin:0 0 8px}
-.price{font-size:2.5em;font-weight:700;margin:0;color:#58a6ff}
-.price span{font-size:0.35em;color:#8b949e;font-weight:400}
-.plan ul{text-align:left;padding:0 16px;color:#8b949e;font-size:0.9em}
-.plan ul li{margin:6px 0}
-footer{text-align:center;padding:40px;color:#484f58;font-size:0.85em}
-a{color:#58a6ff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#080b10;color:#c9d1d9;overflow-x:hidden}
+a{color:#3fb950;text-decoration:none}a:hover{text-decoration:underline}
+.river{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden}
+.rb{position:absolute;border-radius:50%;filter:blur(90px);opacity:0.11}
+.r1{width:700px;height:700px;background:#3fb950;top:-250px;right:-150px;animation:fa 16s ease-in-out infinite}
+.r2{width:500px;height:500px;background:#238636;bottom:-150px;left:-150px;animation:fb 20s ease-in-out infinite}
+.r3{width:350px;height:350px;background:#2ea043;top:50%;left:25%;animation:fc 24s ease-in-out infinite}
+@keyframes fa{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-60px,50px) scale(1.15)}}
+@keyframes fb{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(50px,-60px) scale(1.1)}}
+@keyframes fc{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,30px)}}
+.grid-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(63,185,80,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(63,185,80,0.035) 1px,transparent 1px);background-size:64px 64px}
+.z1{position:relative;z-index:1}
+nav{display:flex;justify-content:space-between;align-items:center;padding:20px 48px;max-width:1100px;margin:0 auto}
+.logo{display:flex;align-items:center;gap:10px;font-size:1.2em;font-weight:700;color:#3fb950}
+.logo span{color:#c9d1d9;font-weight:400}
+.nav-links{display:flex;gap:24px;font-size:14px}
+.nav-links a{color:#8b949e}
+.nav-links a:hover{color:#3fb950}
+.center{text-align:center;max-width:860px;margin:0 auto;padding:80px 40px 60px}
+.badge{display:inline-flex;align-items:center;gap:6px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.25);color:#3fb950;padding:5px 14px;border-radius:20px;font-size:11px;font-weight:600;margin-bottom:28px}
+.dot{width:6px;height:6px;background:#3fb950;border-radius:50%;display:inline-block;animation:pp 2s infinite}
+@keyframes pp{0%,100%{opacity:1}50%{opacity:0.3}}
+.lg{margin:0 auto 28px;width:80px;height:80px;display:block}
+h1{font-size:3.5em;font-weight:800;background:linear-gradient(135deg,#3fb950,#2ea043);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:16px;line-height:1.1}
+.desc{font-size:1.05em;color:#8b949e;margin-bottom:36px;line-height:1.6;max-width:560px;margin-left:auto;margin-right:auto}
+.cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-bottom:44px}
+.bgreen{display:inline-flex;align-items:center;gap:8px;background:#3fb950;color:#080b10;padding:12px 26px;border-radius:8px;font-weight:700;font-size:1em;border:none;text-decoration:none}
+.bgreen:hover{background:#2ea043;text-decoration:none;color:#080b10}
+.boutline{display:inline-flex;align-items:center;gap:8px;background:transparent;color:#c9d1d9;padding:12px 26px;border-radius:8px;font-weight:600;font-size:1em;border:1px solid #30363d;text-decoration:none}
+.boutline:hover{border-color:#3fb950;color:#3fb950}
+.stats{display:flex;justify-content:center;gap:44px;flex-wrap:wrap;margin-top:40px}
+.stat{text-align:center}
+.stat .n{font-size:1.9em;font-weight:800;color:#3fb950}
+.stat .l{font-size:11px;color:#6e7681;text-transform:uppercase;letter-spacing:0.05em;margin-top:2px}
+.hw{background:#0d1117;border-top:1px solid #21262d;border-bottom:1px solid #21262d;padding:60px 40px}
+.hw-inner{max-width:900px;margin:0 auto}
+.sl{color:#3fb950;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px}
+.st{font-size:1.8em;font-weight:700;color:#e6edf3;margin-bottom:8px}
+.ss{color:#6e7681;font-size:14px;margin-bottom:36px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.step{background:#161b22;border:1px solid #21262d;border-radius:10px;padding:22px;position:relative}
+.step .n{position:absolute;top:14px;right:14px;width:26px;height:26px;background:rgba(63,185,80,0.15);color:#3fb950;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.step h3{color:#e6edf3;font-size:14px;margin-bottom:8px;font-weight:600}
+.step p{color:#6e7681;font-size:13px;line-height:1.5}
+.mnote{display:flex;align-items:center;gap:8px;justify-content:center;margin-top:28px;font-size:13px;color:#6e7681}
+.feats{padding:70px 40px;max-width:1000px;margin:0 auto}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.feat{background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:22px;transition:border-color 0.2s}
+.feat:hover{border-color:#3fb950}
+.feat h3{color:#e6edf3;font-size:14px;font-weight:600;margin-bottom:6px}
+.feat p{color:#6e7681;font-size:13px;line-height:1.5}
+.tag{display:inline-block;background:rgba(63,185,80,0.1);color:#3fb950;font-size:10px;padding:2px 8px;border-radius:8px;margin-top:8px;text-transform:uppercase;letter-spacing:0.04em}
+.pricing{background:#0d1117;border-top:1px solid #21262d;padding:70px 40px}
+.pricing-inner{max-width:800px;margin:0 auto}
+.price-grid{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
+.pc{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:30px;min-width:250px;flex:1;position:relative}
+.pc.pop{border-color:#3fb950;box-shadow:0 0 30px rgba(63,185,80,0.08)}
+.pc .pbadge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:#3fb950;color:#080b10;font-size:10px;font-weight:700;padding:3px 14px;border-radius:10px;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap}
+.pc h3{color:#e6edf3;font-size:15px;font-weight:600;margin-bottom:12px}
+.price{font-size:2.8em;font-weight:800;color:#3fb950;margin:0}
+.price span{font-size:0.3em;color:#6e7681;font-weight:400}
+.pc ul{list-style:none;padding:12px 0 20px}
+.pc ul li{color:#8b949e;font-size:13px;padding:4px 0}
+.pc ul li::before{content:"\2713 ";color:#3fb950;margin-right:6px}
+footer{text-align:center;padding:40px;color:#484f58;font-size:12px;border-top:1px solid #21262d}
 </style>
 </head>
 <body>
-<div class="hero">
-    <h1>MergeFlow</h1>
-    <p class="tagline">GitHub PR Auto-Merge -- approved PRs merge the moment CI passes</p>
-    <a href="/login" class="cta">Install Free from GitHub Marketplace</a>
+<div class="river"><b class="rb r1"></b><b class="rb r2"></b><b class="rb r3"></b></div>
+<div class="grid-bg"></div>
+<div class="z1">
+<nav>
+<div class="logo"><svg width="28" height="28" viewBox="0 0 40 40" fill="none"><path d="M20 4 L36 14 L36 30 L20 38 L4 30 L4 14 Z" stroke="#3fb950" stroke-width="2.5" stroke-linejoin="round" fill="rgba(63,185,80,0.15)"/><path d="M12 20 L17 25 L28 14" stroke="#3fb950" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>Merge<span>Flow</span></div>
+<div class="nav-links"><a href="#features">Features</a><a href="#how-it-works">How It Works</a><a href="#pricing">Pricing</a><a href="/login">Sign In</a></div>
+</nav>
+<div class="center">
+<div class="badge"><span class="dot"></span> Live on GitHub Marketplace</div>
+<svg class="lg" viewBox="0 0 80 80" fill="none"><path d="M40 6 L72 22 L72 56 L40 76 L8 56 L8 22 Z" fill="rgba(63,185,80,0.1)" stroke="#3fb950" stroke-width="2.5"/><path d="M22 40 L34 52 L58 28" stroke="#3fb950" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<h1>MergeFlow</h1>
+<p class="desc">Approved PRs merge the moment CI passes. No maintainer delays. No missed releases. Zero configuration required.</p>
+<div class="cta-row"><a href="/login" class="bgreen"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm3.5 11.5L7 7.5l.5-.5 4 4 .5.5-.5.5-4.5 4.5-.5-.5L7 11l2.5-2.5L7 6l.5-.5.5.5L10.5 9z"/></svg>Install Free from GitHub Marketplace</a><a href="#pricing" class="boutline">View Pricing</a></div>
+<div class="stats"><div class="stat"><div class="n">2.4k</div><div class="l">PRs Merged</div></div><div class="stat"><div class="n">&lt;1s</div><div class="l">Merge Latency</div></div><div class="stat"><div class="n">99.9%</div><div class="l">Uptime</div></div></div>
 </div>
-<div class="features">
-    <div class="feature"><h3>Zero Latency</h3><p>PRs merge the second all checks pass and reviews are approved. No waiting for maintainers.</p></div>
-    <div class="feature"><h3>Dry-Run Mode</h3><p>Preview every merge before it happens. Your approval required.</p></div>
-    <div class="feature"><h3>Per-Repo Rules</h3><p>Minimum approvals, squash vs merge, enable/disable per repo.</p></div>
-    <div class="feature"><h3>CI-Gated</h3><p>Only merges when all required checks pass. Never skips a failing test.</p></div>
-    <div class="feature"><h3>Audit Log</h3><p>Full history of every merge and skip with reasons.</p></div>
-    <div class="feature"><h3>14-Day Free Trial</h3><p>No credit card required to start. Upgrades via Stripe.</p></div>
+<div class="hw" id="how-it-works">
+<div class="hw-inner">
+<div class="sl">How It Works</div>
+<div class="st">Live in 60 seconds</div>
+<div class="ss">No server setup. No CI config changes. Installs directly from GitHub Marketplace.</div>
+<div class="steps">
+<div class="step"><div class="n">1</div><h3>Install from Marketplace</h3><p>Click "Install Free". Authorize MergeFlow on your GitHub account or organization. Select which repos to enable.</p></div>
+<div class="step"><div class="n">2</div><h3>Set Your Rules</h3><p>Choose minimum approvals, pick your branch, toggle dry-run. MergeFlow posts a status check on every PR automatically.</p></div>
+<div class="step"><div class="n">3</div><h3>Merge Happens</h3><p>When all CI checks pass and approvals are met, MergeFlow merges instantly. Full audit log. Dry-run preview first.</p></div>
+<div class="mnote"><svg width="14" height="14" viewBox="0 0 16 16" fill="#3fb950"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm3.5 11L7 7.5l.5-.5 4 4 .5.5-.5.5-4.5 4.5-.5-.5L7 11l2.5-2.5L7 6l.5-.5.5.5L10.5 9z"/></svg>14-day free trial via GitHub Marketplace &mdash; no credit card required</div>
 </div>
-<div class="pricing">
-    <div class="plan">
-        <h3>Individual</h3>
-        <p class="price">$29<span>/mo</span></p>
-        <ul>
-            <li>Unlimited repos</li>
-            <li>Dry-run mode</li>
-            <li>Audit log</li>
-            <li>Email support</li>
-        </ul>
-        <a href="/upgrade/individual" class="cta">Upgrade via Stripe</a>
-    </div>
-    <div class="plan">
-        <h3>Team</h3>
-        <p class="price">$99<span>/mo</span></p>
-        <ul>
-            <li>Everything in Individual</li>
-            <li>Team seat management</li>
-            <li>Slack notifications</li>
-            <li>Priority support</li>
-        </ul>
-        <a href="/upgrade/team" class="cta">Upgrade via Stripe</a>
-    </div>
+</div>
+<div class="feats" id="features">
+<div class="sl">Features</div>
+<div class="feat-grid">
+<div class="feat"><h3>Zero Latency Merge</h3><p>PRs merge the second all checks pass and reviews are approved. No polling, no delays, no maintainer required.</p><span class="tag">Core</span></div>
+<div class="feat"><h3>Dry-Run Mode</h3><p>Preview every merge before it happens. You approve, MergeFlow executes. Full visibility before any changes.</p><span class="tag">Pro</span></div>
+<div class="feat"><h3>Per-Repo Rules</h3><p>Minimum approvals, squash vs merge, branch rules. Configure per repository independently.</p><span class="tag">Core</span></div>
+<div class="feat"><h3>CI-Gated</h3><p>Only merges when all required status checks pass. Never skips a failing test or bypasses CI.</p><span class="tag">Core</span></div>
+<div class="feat"><h3>Full Audit Log</h3><p>Every merge, every skip, every dry-run &mdash; logged with reason, timestamp, and actor. Exportable.</p><span class="tag">Pro</span></div>
+<div class="feat"><h3>Smart Notifications</h3><p>Slack and email alerts on merge, skip, or failure. Keep your team in the loop without the noise.</p><span class="tag">Team</span></div>
+</div>
+</div>
+<div class="pricing" id="pricing">
+<div class="pricing-inner">
+<div class="sl">Pricing</div>
+<div class="st" style="margin-bottom:32px">Start free. Upgrade when you&apos;re ready.</div>
+<div class="price-grid">
+<div class="pc">
+<h3>Free Trial</h3>
+<p class="price">$0<span>/mo</span></p>
+<ul><li>3 repos included</li><li>Auto-merge on CI pass</li><li>Minimum 1 approval rule</li><li>GitHub status checks</li><li>Basic audit log</li></ul>
+<a href="/login" class="bgreen" style="width:100%;justify-content:center;display:flex">Install Free</a>
+</div>
+<div class="pc pop">
+<div class="pbadge">Most Popular</div>
+<h3>Individual</h3>
+<p class="price">$29<span>/mo</span></p>
+<ul><li>Unlimited repos</li><li>Dry-run mode</li><li>Full audit log</li><li>Custom approval rules</li><li>Priority support</li></ul>
+<a href="/upgrade/individual" class="bgreen" style="width:100%;justify-content:center;display:flex;background:#238636">Upgrade via Stripe</a>
+</div>
+<div class="pc">
+<h3>Team</h3>
+<p class="price">$99<span>/mo</span></p>
+<ul><li>Everything in Individual</li><li>Team seat management</li><li>Slack notifications</li><li>SSO / SAML</li><li>Dedicated support</li></ul>
+<a href="/upgrade/team" class="boutline" style="width:100%;justify-content:center;display:flex;border-color:#3fb950;color:#3fb950">Upgrade via Stripe</a>
+</div>
+</div>
+</div>
 </div>
 <footer>
-    &copy; 2026 MergeFlow -- Autonomous GitHub PR Management
+<div>MergeFlow &copy; 2026 &mdash; Autonomous GitHub PR Management</div>
+<div style="margin-top:8px"><a href="https://github.com/marketplace/mergeflow-pr" style="color:#484f58">GitHub Marketplace</a> &middot; <a href="/dashboard" style="color:#484f58">Dashboard</a></div>
 </footer>
+</div>
 </body>
 </html>
