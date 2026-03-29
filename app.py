@@ -438,5 +438,17 @@ if __name__ == "__main__":
         except Exception:
             db.session.rollback()
             print("DB: min_approvals column already exists (OK)", flush=True)
+        # Add missing columns that may not exist in existing DB
+        for col_def in [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
+            "ALTER TABLE repos ADD COLUMN IF NOT EXISTS branch VARCHAR(100) DEFAULT 'main'",
+            "ALTER TABLE repos ADD COLUMN IF NOT EXISTS auto_merge_enabled BOOLEAN DEFAULT TRUE",
+        ]:
+            try:
+                db.session.execute(db.text(col_def))
+                db.session.commit()
+                print("DB: added column:", col_def[:40], flush=True)
+            except Exception:
+                db.session.rollback()
     print("STARTING SERVER", flush=True)
     app.run(host="0.0.0.0", port=8000)
