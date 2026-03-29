@@ -51,10 +51,15 @@ class Repo(db.Model):
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
-print("STEP4 app alive V2", flush=True)
+print("STEP4 app alive V5_LANDING_REDESIGN", flush=True)
 @app.route("/healthz")
 def health():
-    return jsonify({"status": "ok"})
+    import subprocess
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
+    except:
+        commit = "unknown"
+    return jsonify({"status": "ok", "commit": commit})
 @app.route("/")
 def root():
     return render_template("landing.html")
